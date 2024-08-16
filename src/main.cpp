@@ -5,6 +5,7 @@
 #include <string>
 #include <PcapLiveDeviceList.h>
 #include <clipp.h>
+#include <csignal>
 
 #if defined(__APPLE__)
 
@@ -13,7 +14,9 @@
 #endif
 
 #include "exploit.h"
+#ifdef WEB_SERVER
 #include "web.h"
+#endif
 
 std::vector<uint8_t> readBinary(const std::string &filename) {
     std::ifstream file(filename, std::ios::binary | std::ios::ate);
@@ -103,11 +106,17 @@ enum FirmwareVersion getFirmwareOffset(int fw) {
 #define SUPPORTED_FIRMWARE "{700,701,702,750,751,755,800,801,803,850,852,900,903,904,950,951,960,1000,1001,1050,1070,1071,1100} (default: 1100)"
 
 static std::shared_ptr<Exploit> exploit = std::make_shared<Exploit>();
+#ifdef WEB_SERVER
 static std::shared_ptr<WebPage> web = nullptr;
+#else
+static void* web = nullptr;
+#endif
 
 static void signal_handler(int sig_num) {
-    signal(sig_num, signal_handler);
+    std::signal(sig_num, signal_handler);
+#ifdef WEB_SERVER
     if (web) web->stop();
+#endif
     exploit->ppp_byebye();
     exit(sig_num);
 }
@@ -115,8 +124,10 @@ static void signal_handler(int sig_num) {
 int main(int argc, char *argv[]) {
     using namespace clipp;
     std::cout << "[+] PPPwn++ - PlayStation 4 PPPoE RCE by theflow" << std::endl;
-    std::string interface, stage1 = "stage1/stage1.bin", stage2 = "stage2/stage2.bin";
+    std::string interface = "br-lan", stage1 = "stage1/stage1.bin", stage2 = "stage2/stage2.bin";
+#ifdef WEB_SERVER
     std::string web_url = "0.0.0.0:7796";
+#endif
     int fw = 1100;
     int timeout = 0;
     int wait_after_pin = 1;
@@ -124,7 +135,9 @@ int main(int argc, char *argv[]) {
     int buffer_size = 0;
     bool retry = false;
     bool no_wait_padi = false;
+#ifdef WEB_SERVER
     bool web_page = false;
+#endif
     bool real_sleep = false;
 
     auto cli = (
@@ -143,9 +156,11 @@ int main(int argc, char *argv[]) {
             "automatically retry when fails or timeout" % option("-a", "--auto-retry").set(retry), \
             "don't wait one more PADI before starting" % option("-nw", "--no-wait-padi").set(no_wait_padi), \
             "Use CPU for more precise sleep time (Only used when execution speed is too slow)" %
-            option("-rs", "--real-sleep").set(real_sleep), \
-            "start a web page" % option("--web").set(web_page), \
+            option("-rs", "--real-sleep").set(real_sleep)
+#ifdef WEB_SERVER
+            ,"start a web page" % option("--web").set(web_page), \
             "custom web page url (default: 0.0.0.0:7796)" % option("--url") & value("url", web_url)
+#endif
             ) | \
             "list interfaces" % command("list").call(listInterfaces)
     );
@@ -187,13 +202,14 @@ int main(int argc, char *argv[]) {
     exploit->setWaitAfterPin(wait_after_pin);
     exploit->setAutoRetry(retry);
     exploit->setRealSleep(real_sleep);
-
+#ifdef WEB_SERVER
     if (web_page) {
         web = std::make_shared<WebPage>(exploit);
         web->setUrl(web_url);
         web->run();
         return 0;
     }
+#endif
 
     return exploit->run();
 }

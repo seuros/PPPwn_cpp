@@ -18,6 +18,7 @@ cmake_dependent_option(USE_SYSTEM_PCAP "Find pcap from system path" ON "NOT USE_
 
 option(BUILD_CLI "build command line tool" ON)
 option(BUILD_TEST "build test" OFF)
+option(WEB_SERVER "Enable web server" OFF)
 
 if (ZIG_TARGET)
     include(${CMAKE_SOURCE_DIR}/cmake/zig.cmake)
@@ -66,8 +67,7 @@ else ()
         set(DISABLE_DBUS ON)
         set(DISABLE_RDMA ON)
         set(BUILD_WITH_LIBNL OFF)
-        FetchContent_Declare(pcap GIT_REPOSITORY https://github.com/the-tcpdump-group/libpcap.git
-                GIT_TAG libpcap-1.10.4)
+        FetchContent_Declare(pcap GIT_REPOSITORY https://github.com/the-tcpdump-group/libpcap.git GIT_TAG libpcap-1.10.4)
         FetchContent_MakeAvailable(pcap)
         file(COPY ${pcap_SOURCE_DIR}/pcap DESTINATION ${CMAKE_BINARY_DIR}/vendor/include)
         include_directories("${CMAKE_BINARY_DIR}/vendor/include")
@@ -87,8 +87,7 @@ else ()
     set(PCAPPP_ENABLE_PCAP_SET_DIRECTION ${PPPWN_PCAP_DIRECTION})
     set(PCAPPP_ENABLE_PCAP_IMMEDIATE_MODE ON)
     include(FetchContent)
-    FetchContent_Declare(PcapPlusPlus GIT_REPOSITORY https://github.com/seladb/PcapPlusPlus.git
-            GIT_TAG v23.09)
+    FetchContent_Declare(PcapPlusPlus GIT_REPOSITORY https://github.com/seladb/PcapPlusPlus.git GIT_TAG v23.09)
     FetchContent_MakeAvailable(PcapPlusPlus)
     set_property(TARGET Packet++ PROPERTY COMPILE_WARNING_AS_ERROR OFF)
     set_property(TARGET Pcap++ PROPERTY COMPILE_WARNING_AS_ERROR OFF)
@@ -101,8 +100,7 @@ else ()
         add_custom_target(PatchLayer
                 WORKING_DIRECTORY ${PcapPlusPlus_SOURCE_DIR}
                 COMMAND git checkout -- ${PcapPlusPlus_SOURCE_DIR}/Packet++/header/Layer.h
-                COMMAND git apply --stat --apply ${CMAKE_SOURCE_DIR}/endian.patch
-        )
+                COMMAND git apply --stat --apply ${CMAKE_SOURCE_DIR}/endian.patch)
         add_dependencies(Packet++ PatchLayer)
     endif ()
 endif ()
@@ -127,17 +125,24 @@ if (BUILD_CLI)
     target_compile_options(mongoose PUBLIC -DMG_ENABLE_PACKED_FS=1)
     target_include_directories(mongoose PUBLIC ${mongoose_SOURCE_DIR})
 
-    add_custom_command(
-            OUTPUT ${CMAKE_BINARY_DIR}/static.c
-            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-            COMMAND ${ZIG} cc -o ${CMAKE_BINARY_DIR}/pack ${mongoose_SOURCE_DIR}/test/pack.c
-            COMMAND ${CMAKE_BINARY_DIR}/pack web/*.html web/*.ttf > ${CMAKE_BINARY_DIR}/static.c
-            DEPENDS web/index.html
-    )
+    if(WEB_SERVER)
+        add_custom_command(
+                OUTPUT ${CMAKE_BINARY_DIR}/static.c
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                COMMAND ${ZIG} cc -o ${CMAKE_BINARY_DIR}/pack ${mongoose_SOURCE_DIR}/test/pack.c
+                COMMAND ${CMAKE_BINARY_DIR}/pack web/*.html web/*.ttf > ${CMAKE_BINARY_DIR}/static.c
+                DEPENDS web/index.html
+        )
 
-    add_executable(${PROJECT_NAME} src/main.cpp src/web.cpp ${mongoose_SOURCE_DIR}/mongoose.c ${CMAKE_BINARY_DIR}/static.c)
-    target_include_directories(${PROJECT_NAME} PRIVATE ${clipp_SOURCE_DIR}/include ${mongoose_SOURCE_DIR})
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_static mongoose)
+        add_executable(${PROJECT_NAME} src/main.cpp src/web.cpp ${mongoose_SOURCE_DIR}/mongoose.c ${CMAKE_BINARY_DIR}/static.c)
+        target_include_directories(${PROJECT_NAME} PRIVATE ${clipp_SOURCE_DIR}/include ${mongoose_SOURCE_DIR})
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_static mongoose)
+    else()
+        add_executable(${PROJECT_NAME} src/main.cpp)
+        target_include_directories(${PROJECT_NAME} PRIVATE ${clipp_SOURCE_DIR}/include)
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_static)
+    endif()
+
 endif ()
 
 if (BUILD_TEST)
