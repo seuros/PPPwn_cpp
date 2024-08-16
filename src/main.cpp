@@ -73,11 +73,10 @@ void listInterfaces() {
 }
 
 enum FirmwareVersion getFirmwareOffset(int fw) {
-    std::unordered_map<int, enum FirmwareVersion> fw_choices = {
+    static const std::unordered_map<int, enum FirmwareVersion> fw_choices = {
             {700,  FIRMWARE_700_702},
             {701,  FIRMWARE_700_702},
             {702,  FIRMWARE_700_702},
-            {750,  FIRMWARE_750_755},
             {750,  FIRMWARE_750_755},
             {751,  FIRMWARE_750_755},
             {755,  FIRMWARE_750_755},
@@ -100,7 +99,7 @@ enum FirmwareVersion getFirmwareOffset(int fw) {
             {1100, FIRMWARE_1100}
     };
     if (fw_choices.count(fw) == 0) return FIRMWARE_UNKNOWN;
-    return fw_choices[fw];
+    return fw_choices.at(fw);
 }
 
 #define SUPPORTED_FIRMWARE "{700,701,702,750,751,755,800,801,803,850,852,900,903,904,950,951,960,1000,1001,1050,1070,1071,1100} (default: 1100)"
